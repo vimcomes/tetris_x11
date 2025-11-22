@@ -1,0 +1,15 @@
+# CMake build directories
+cmake-build-*/
+build/
+out/
+
+# CLion / IntelliJ IDE files
+.idea/
+*.iml
+
+# Compiled object files
+*.o
+*.obj
+
+# Other
+*.log
