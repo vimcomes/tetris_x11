@@ -61,6 +61,13 @@ Buttons on the right panel:
     - next piece preview,
     - side panel with score, level and buttons.
 
+## Recent Changes
+
+- Rendering: double-buffered Xlib drawing to avoid flicker; palette allocated via `XAllocColor`; ghost piece preview with toggle.
+- Gameplay: lock delay when touching the stack (including hard drop), 7-bag randomizer, tunable drop speed per level.
+- UX: dashed ghost outline, options section with checkbox, line-clear flash effect, improved multi-line scoring.
+- Scoring: bonuses scale with cleared lines (1/2/3/4 → 100/300/700/1200 * level).
+
 ## License
 
 Not explicitly specified yet. If you use this code in your own projects, please link back to this repository.
