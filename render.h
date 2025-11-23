@@ -5,7 +5,7 @@
 
 struct Rect { int x,y,w,h; };
 
-// некоторые константы рендера (не логики)
+// rendering-specific constants
 constexpr int TILE   = 24;
 constexpr int MARGIN = 4;
 constexpr int PANEL_W = 6*TILE + 2*MARGIN;
@@ -16,10 +16,11 @@ constexpr unsigned long PANEL_BG = 0x111111;
 
 unsigned long rgb(unsigned char r,unsigned char g,unsigned char b);
 
-// отрисовка одного кадра
+// render a single frame
 void render(Display* dpy,
             Window win,
             GC gc,
             const Game& game,
             const Rect& pause_btn,
-            const Rect& exit_btn);
+            const Rect& exit_btn,
+            const Rect& ghost_btn);

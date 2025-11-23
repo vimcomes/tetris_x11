@@ -2,9 +2,8 @@
 // Created by roman on 2025-11-22.
 //
 #include "game.h"
-#include <cstdlib>
-#include <ctime>
 #include <algorithm>
+#include <random>
 
 namespace {
 
@@ -61,8 +60,8 @@ const std::array<std::array<Shape,4>,Game::PIECE_COUNT> SHAPES = {{
 
 std::chrono::milliseconds compute_drop_interval(int level) {
     int base = 500;   // ms
-    int step = 40;    // уменьшение на уровень
-    int min_ms = 80;  // нижний предел
+    int step = 40;    // decrease per level
+    int min_ms = 80;  // lower bound
     int ms = base - (level - 1) * step;
     if (ms < min_ms) ms = min_ms;
     return std::chrono::milliseconds(ms);
@@ -71,9 +70,10 @@ std::chrono::milliseconds compute_drop_interval(int level) {
 } // namespace
 
 void Game::init(){
-    std::srand(static_cast<unsigned>(std::time(nullptr)));
+    std::random_device rd;
+    rng.seed(rd());
 
-    // базовые цвета (по умолчанию, если пользователь не задаст свои)
+    // default piece colors (can be overridden later if needed)
     colors[0] = 0x00ffff;
     colors[1] = 0x0000ff;
     colors[2] = 0xffa500;
@@ -88,6 +88,7 @@ void Game::init(){
         pieces[i].color = colors[i];
     }
 
+    refill_bag();
     reset();
 }
 
@@ -101,8 +102,10 @@ void Game::reset(){
     level = 1;
     total_lines_cleared = 0;
 
-    cur = rand_piece();
-    nxt = rand_piece();
+    bag_pos = 0;
+    refill_bag();
+    cur = next_piece();
+    nxt = next_piece();
 
     update_drop_interval();
 }
@@ -111,8 +114,18 @@ void Game::update_drop_interval(){
     drop_ms = compute_drop_interval(level);
 }
 
-int Game::rand_piece() const {
-    return std::rand() % PIECE_COUNT;
+void Game::refill_bag() {
+    bag.resize(PIECE_COUNT);
+    for(int i=0;i<PIECE_COUNT;++i) bag[i] = i;
+    std::shuffle(bag.begin(), bag.end(), rng);
+    bag_pos = 0;
+}
+
+int Game::next_piece() {
+    if(bag.empty() || bag_pos >= bag.size()){
+        refill_bag();
+    }
+    return bag[bag_pos++];
 }
 
 bool Game::collides(int nx,int ny,int nr) const{
@@ -126,20 +139,30 @@ bool Game::collides(int nx,int ny,int nr) const{
 }
 
 int Game::clear_lines(){
-    int cleared = 0;
+    cleared_rows.clear();
+
+    std::vector<int> full_rows;
     for(int r = H-1; r >= 0; --r){
         bool full = true;
         for(int c = 0; c < W; ++c){
             if(!field[r][c]){ full = false; break; }
         }
         if(full){
-            for(int rr = r; rr > 0; --rr) field[rr] = field[rr-1];
-            field[0].fill(0);
-            ++cleared;
-            ++r; // пересканировать ту же строку после сдвига
+            full_rows.push_back(r);
+            cleared_rows.push_back(ClearedRow{r, field[r]});
         }
     }
-    return cleared;
+    if(full_rows.empty()) return 0;
+
+    Field new_field{};
+    int dest = H-1;
+    for(int r = H-1; r >= 0; --r){
+        if(std::find(full_rows.begin(), full_rows.end(), r) != full_rows.end())
+            continue;
+        new_field[dest--] = field[r];
+    }
+    field = new_field;
+    return static_cast<int>(full_rows.size());
 }
 
 void Game::lock_piece(){
@@ -152,13 +175,12 @@ void Game::lock_piece(){
 
     int lines = clear_lines();
     if(lines > 0){
-        static const int base_scores[5] = {0,100,300,500,800};
-        if(lines <= 4){
-            score += base_scores[lines] * level;
-        } else {
-            score += 1200 * level;
-        }
+        static const int base_scores[5] = {0,100,300,700,1200}; // tuned rewards per line count
+        int capped = std::min(lines, 4);
+        score += base_scores[capped] * level;
         total_lines_cleared += lines;
+        flashing = true;
+        flash_until = std::chrono::steady_clock::now() + std::chrono::milliseconds(240);
 
         int new_level = 1 + total_lines_cleared / 10;
         if(new_level != level){
@@ -166,10 +188,14 @@ void Game::lock_piece(){
             update_drop_interval();
         }
     }
+    if(lines == 0){
+        flashing = false;
+        cleared_rows.clear();
+    }
 
     px = 3; py = 0; pr = 0;
     cur = nxt;
-    nxt = rand_piece();
+    nxt = next_piece();
     if(collides(px,py,pr)){
         over = true;
         paused = false;
@@ -188,5 +214,4 @@ void Game::try_move(int dx,int dy,int dr){
 void Game::hard_drop(){
     while(!collides(px,py+1,pr))
         py++;
-    lock_piece();
 }
